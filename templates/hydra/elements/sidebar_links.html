@@ -2,7 +2,6 @@
     <h3>{% trans 'Linked Articles' %}</h3>
     {% regroup relatives by relationship as grouped_relations %}
     {% for relationship, relations in grouped_relations %}
-    <h4>{{ relationship }}</h4>
     <ul>
         {% for relation in relations %}
         <li>
