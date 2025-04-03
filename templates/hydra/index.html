@@ -1,0 +1,13 @@
+{% extends "admin/core/base.html" %}
+
+{% block title %}Hail Hydra{% endblock title %}
+{% block title-section %}Hydra{{ galley.pk }}{% endblock %}
+
+{% block breadcrumbs %}
+    {{ block.super }}
+{% endblock breadcrumbs %}
+
+{% block body %}
+<div class="box">
+<p>The Hydra plugin is installed</p>
+{% endblock body %}

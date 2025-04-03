@@ -1,0 +1,16 @@
+<div class="section">
+    <h3>{% trans 'Linked Articles' %}</h3>
+    {% regroup relatives by relationship as grouped_relations %}
+    {% for relationship, relations in grouped_relations %}
+    <h4>{{ relationship }}</h4>
+    <ul>
+        {% for relation in relations %}
+        <li>
+            <a href="{{ relation.to_article.url }}" target="_blank">
+                {{ relation.to_article.language }}: {{ relation.to_article.title }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endfor %}
+</div>
