@@ -39,4 +39,9 @@ def hook_registry():
                 'module': 'plugins.hydra.hooks',
                 'function': 'sidebar_article_links',
             },
+        'language_header':
+            {
+                'module': 'plugins.hydra.hooks',
+                'function': 'language_header_switcher',
+            }
     }
