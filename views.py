@@ -8,8 +8,12 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 
-from plugins.typesetting import plugin_settings, models, logic, forms, security
-from plugins.typesetting.notifications import notify
+try:
+    from plugins.typesetting import plugin_settings, models, logic, forms, security
+    from plugins.typesetting.notifications import notify
+except ImportError:
+    from typesetting import plugin_settings, models, logic, forms, security
+    from typesetting.notifications import notify
 from security import decorators
 from submission import models as submission_models
 from core import models as core_models, forms as core_forms, files
