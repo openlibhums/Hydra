@@ -87,6 +87,9 @@ class Command(BaseCommand):
                     f"Updating existing article {new_article.pk} for pubid {pub_id} in {target_journal.code}"
                 )
             )
+            new_article.galley_set.all().delete()
+            core_models.File.objects.filter(article_id=new_article.id).delete()
+
         else:
             new_article = submission_models.Article(
                 journal=target_journal,
