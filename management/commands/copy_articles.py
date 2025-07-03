@@ -10,6 +10,7 @@ from journal import models as journal_models
 from core import models as core_models
 from identifiers import models as identifiers_models
 from utils import setting_handler, render_template
+from plugins.hydra import models
 
 
 class Command(BaseCommand):
@@ -69,7 +70,8 @@ class Command(BaseCommand):
 
         for article in articles:
             with transaction.atomic():
-                self.copy_article(article, target_journal)
+                new_article = self.copy_article(article, target_journal)
+                self.link_articles(article, new_article)
 
     def copy_article(self, article, target_journal):
         # Check for existing pubid in target journal
@@ -79,6 +81,9 @@ class Command(BaseCommand):
             identifier=pub_id,
             article__journal=target_journal,
         ).select_related('article').first()
+
+        if existing and existing.article == article:
+            raise RuntimeError("You are copying an article onto itself!")
 
         if existing:
             new_article = existing.article
@@ -199,12 +204,14 @@ class Command(BaseCommand):
 
         # Pub ID to link to master record
         self.create_pub_id(article, new_article)
+        self.create_link_id(article, new_article)
         self.create_doi(article, new_article)
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"Copied article {article.pk} to {new_article.pk} ({new_article.url})")
         )
+        return new_article
 
     def get_or_copy_section(self, section, journal):
         return submission_models.Section.objects.get_or_create(
@@ -323,6 +330,15 @@ class Command(BaseCommand):
             }
         )
 
+    def create_link_id(self, source_article, target_article):
+        """Creates an id to memoize where the article was copied from"""
+        link_id = source_article.pk
+        identifiers_models.Identifier.objects.get_or_create(
+            id_type='linkid',
+            article=target_article,
+            identifier=link_id,
+        )
+
     def create_doi(self, source_article, target_article):
         doi_prefix = setting_handler.get_setting(
             'Identifiers',
@@ -340,3 +356,16 @@ class Command(BaseCommand):
             article=target_article,
         )
         return '{0}/{1}'.format(doi_prefix, doi_suffix)
+
+    def link_articles(self, source_article, target_article):
+        to_link = identifiers_models.Identifier.objects.filter(
+            id_type="linkid",
+            identifier=source_article.pk,
+        )
+        if to_link.count() < 2:
+            return
+        for a, b in itertools.permutations(to_link, 2):
+            models.LinkedArticle.objects.get_or_create(
+                from_article=a,
+                to_article=b
+            )
