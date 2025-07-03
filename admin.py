@@ -4,12 +4,16 @@ from plugins.hydra import models
 
 @admin.register(models.LinkedArticle)
 class ArticleLinkAdmin(admin.ModelAdmin):
-    list_display = ("from_article", "to_article")
-    search_fields = ("from_article__title", "to_article__title")
+    list_display = ("from_article", "linked_journal_code", "to_article")
+    search_fields = ("from_article__id", "from_article__title", "to_article__title")
     list_filter = ("from_article__journal", "to_article__journal")
     ordering = ("from_article", "to_article")
     raw_id_fields = ("from_article", "to_article")
 
+    def linked_journal_code(self, obj):
+        if obj.to_article and obj.to_article.journal:
+            return obj.to_article.journal.code
+        return None
 
 @admin.register(models.JournalLink)
 class JournalLinkAdmin(admin.ModelAdmin):

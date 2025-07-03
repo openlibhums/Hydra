@@ -334,9 +334,12 @@ class Command(BaseCommand):
             'doi_pattern',
             group_name='Identifiers'
         )
-        identifiers_models.Identifier.objects.get_or_create(
-            id_type='doi',
-            identifier=f'{doi_prefix}/{doi_suffix}',
-            article=target_article,
-        )
+        try:
+            identifiers_models.Identifier.objects.get_or_create(
+                id_type='doi',
+                identifier=f'{doi_prefix}/{doi_suffix}',
+                article=target_article,
+            )
+        except identifiers_models.Identifier.MultipleObjectsReturned:
+            self.stdout.write(self.style.WARNING("Multiple identical DOIs found"))
         return '{0}/{1}'.format(doi_prefix, doi_suffix)
