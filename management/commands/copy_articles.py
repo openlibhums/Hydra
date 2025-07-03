@@ -311,7 +311,7 @@ class Command(BaseCommand):
             new_galley.save()
 
     def copy_frozen_authors(self, source_article, target_article):
-        target_article.frozen_authors.all().delete()
+        target_article.frozen_authors().all().delete()
         for fa in source_article.frozenauthor_set.all():
             fa.pk = None
             fa.article = target_article
