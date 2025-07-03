@@ -334,7 +334,7 @@ class Command(BaseCommand):
             'doi_pattern',
             group_name='Identifiers'
         )
-        identifiers_models.Identifier.objects.create(
+        identifiers_models.Identifier.objects.get_or_create(
             id_type='doi',
             identifier=f'{doi_prefix}/{doi_suffix}',
             article=target_article,
