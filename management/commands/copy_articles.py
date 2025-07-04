@@ -44,7 +44,10 @@ class Command(BaseCommand):
         parser.add_argument(
             '--target-lang',
             type=str,
-            help='Language code of the target journal eg "es" or "fr"',
+            help=(
+                'Language code of the target journal eg "es" or "fr".'
+                ' will use the journal default if not provided',
+            ),
         )
 
     def handle(self, *args, **options):
@@ -147,9 +150,12 @@ class Command(BaseCommand):
             setattr(new_article, f"title_{lang_code}",
                     getattr(article, f"title_{lang_code}", None))
 
-        if self.target_lang:
-            new_article.title_en = getattr(article, f"title_{self.target_lang}")
-            new_article.title = getattr(article, f"title_{self.target_lang}")
+        # TODO: Remove once outgoing feeds/apis support multilang
+        language = self.target_lang or get_journal_lang_code(new_article.journal)
+        if language:
+            # Set default / en language to translated language
+            new_article.title_en = getattr(article, f"title_{language}")
+            new_article.title = getattr(article, f"title_{language}")
 
         # Section
         if article.section:
@@ -295,7 +301,11 @@ class Command(BaseCommand):
         return new_file
 
     def copy_galleys(self, source_article, target_article):
-        for galley in source_article.galley_set.filter(label__icontains=self.target_lang):
+        language = self.target_lang or get_journal_lang_code(target_article.journal)
+        if not language:
+            self.stderr.write(self.style.ERROR("No language provided and no default found"))
+            return
+        for galley in source_article.galley_set.filter(label__icontains=f"_{language}"):
             new_galley = core_models.Galley.objects.get(pk=galley.pk)
             new_galley.pk = None
             new_galley.article = target_article
@@ -364,14 +374,19 @@ class Command(BaseCommand):
         return '{0}/{1}'.format(doi_prefix, doi_suffix)
 
     def link_articles(self, source_article, target_article):
-        to_link = identifiers_models.Identifier.objects.filter(
-            id_type="linkid",
-            identifier=source_article.pk,
+        models.LinkedArticle.objects.get_or_create(
+            from_article=source_article,
+            to_article=target_article,
         )
-        if to_link.count() < 2:
-            return
-        for a, b in itertools.permutations(to_link, 2):
-            models.LinkedArticle.objects.get_or_create(
-                from_article=a,
-                to_article=b
-            )
+
+def get_journal_lang_code(journal):
+    language = None
+    try:
+        language = journal.get_setting(
+            group_name="general",
+            setting_name="default_journal_language",
+        )
+    except Exception:
+        pass
+
+    return language
