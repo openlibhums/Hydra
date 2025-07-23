@@ -1,4 +1,5 @@
 {% extends "admin/core/base.html" %}
+{% load foundation %}
 
 {% block title %}Hail Hydra{% endblock title %}
 {% block title-section %}Hydra{{ galley.pk }}{% endblock %}
@@ -8,6 +9,22 @@
 {% endblock breadcrumbs %}
 
 {% block body %}
-<div class="box">
-<p>The Hydra plugin is installed</p>
+
+  <div class="box">
+        <div class="content">
+            <div class="row expanded">
+                <div class="large-6 columns">
+                    <p>The Hydra plugin is installed</p>
+                    <p>Use this form to enable the Hydra navbar hook. Linked articles will have jump links rendered in the left hand menu.</p>
+                    <form method="POST">
+                        {% include "admin/elements/forms/errors.html" with form=form %}
+                        {% csrf_token %}
+                        {{ form|foundation }}
+                        <button class="button success" type="submit">Save</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
 {% endblock body %}

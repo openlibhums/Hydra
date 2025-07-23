@@ -1,13 +1,14 @@
-from itertools import groupby
-from operator import attrgetter
+from urllib.parse import urlparse
 
 from django.db.models import Q, Subquery
-from django.apps import apps
 from django.template.loader import render_to_string
 from django.utils.translation import get_language_info
 
 from plugins.hydra import models
 from utils.logger import get_logger
+from utils.function_cache import cache
+from utils import setting_handler
+from submission import models as submission_models
 
 
 logger = get_logger(__name__)
@@ -108,3 +109,101 @@ def language_header_switcher(context):
             "language_links": links,
         }
     )
+
+
+def editor_nav_article_switcher(context):
+    """
+    Adds backend links to linked articles.
+    """
+    request = context["request"]
+    journal = getattr(request, "journal", None)
+    article = context.get("article")
+
+    sidebar_enabled = setting_handler.get_setting(
+        "plugin:hydra",
+        "hydra_enable_sidebar",
+        journal=journal,
+    ).processed_value
+
+    if not sidebar_enabled:
+        return ""
+
+    if not article or not journal:
+        return ""
+
+    related = article.linked_from.select_related(
+        "from_article__journal",
+        "to_article__journal",
+    ).all()
+    related |= article.linked_to.select_related(
+        "from_article__journal",
+        "to_article__journal",
+    ).all()
+
+    linked_articles = get_interlinked_articles(article.pk)
+    linked_articles = {a for a in linked_articles if a.pk != article.pk}
+
+    if not linked_articles:
+        return ""
+
+    current_code = journal.code
+    links = []
+
+    for a in linked_articles:
+        raw_url = a.current_workflow_element_url or ""
+        parsed = urlparse(raw_url)
+        path_parts = parsed.path.strip("/").split("/")
+
+        # If the current journal code appears early AND this is a *different* journal
+        if (
+            current_code in path_parts[:2]
+            and a.journal_id != journal.pk
+        ):
+            path_parts = [part for part in path_parts if part != current_code]
+
+        cleaned_path = "/" + "/".join(path_parts)
+
+        links.append({
+            "article": a,
+            "journal": a.journal.code if hasattr(a, "journal") else "",
+            "url": cleaned_path,
+        })
+
+    return render_to_string(
+        "hydra/elements/linked_article_admin_links.html",
+        {
+            "article_links": links,
+        }
+    )
+
+
+@cache(600)
+def get_interlinked_articles(article_id):
+    """
+    Return related articles: direct children and siblings via parent relationship.
+    """
+    try:
+        article = submission_models.Article.objects.get(pk=article_id)
+    except submission_models.Article.DoesNotExist:
+        return set()
+
+    parent_ids = models.LinkedArticle.objects.filter(
+        to_article=article
+    ).values("from_article")
+
+    relatives = models.LinkedArticle.objects.filter(
+        Q(from_article=article) | Q(from_article__in=Subquery(parent_ids))
+    ).select_related(
+        "from_article__journal",
+        "to_article__journal",
+    ).distinct()
+
+    linked_articles = set()
+
+    for link in relatives:
+        if link.from_article and link.from_article.pk != article.pk:
+            linked_articles.add(link.from_article)
+        if link.to_article and link.to_article.pk != article.pk:
+            linked_articles.add(link.to_article)
+
+    return linked_articles

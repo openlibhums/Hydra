@@ -1,4 +1,5 @@
 from utils import plugins
+from utils.install import update_settings
 
 PLUGIN_NAME = 'Hydra'
 DISPLAY_NAME = 'Hydra'
@@ -31,6 +32,7 @@ class HydraPlugin(plugins.Plugin):
 
 def install():
     HydraPlugin.install()
+    update_settings(file_path="plugins/hydra/install/settings.json")
 
 def hook_registry():
     return {
@@ -43,5 +45,10 @@ def hook_registry():
             {
                 'module': 'plugins.hydra.hooks',
                 'function': 'language_header_switcher',
+            },
+        'journal_editor_nav_block':
+            {
+                'module': 'plugins.hydra.hooks',
+                'function': 'editor_nav_article_switcher',
             }
     }
