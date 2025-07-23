@@ -1,26 +1,14 @@
-from django.shortcuts import render, get_object_or_404, redirect, reverse
+from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.core.files.base import ContentFile
-from django.http import Http404
-from django.views.decorators.http import require_POST
-from django.utils import timezone
-from django.core.exceptions import PermissionDenied, ValidationError
-from django.contrib.auth.decorators import login_required
-from django.db.models import Q
 
 try:
-    from plugins.typesetting import plugin_settings, models, logic, forms, security
+    from plugins.typesetting import plugin_settings, models, logic, security
     from plugins.typesetting.notifications import notify
 except ImportError:
-    from typesetting import plugin_settings, models, logic, forms, security
-    from typesetting.notifications import notify
+    pass
 from security import decorators
-from submission import models as submission_models
-from core import models as core_models, forms as core_forms, files
-from production import logic as production_logic
-from journal.views import article_figure
-from journal import logic as journal_logic
 from utils.logger import get_logger
+from plugins.hydra import forms
 
 logger = get_logger(__name__)
 
@@ -28,6 +16,24 @@ logger = get_logger(__name__)
 @decorators.has_journal
 @decorators.editor_user_required
 def index(request):
+    form = forms.HydraAdminForm(
+        journal=request.journal,
+    )
+    if request.POST:
+        print(request.POST)
+        form = forms.HydraAdminForm(
+            request.POST,
+            journal=request.journal,
+        )
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                'Settings updated successfully',
+            )
+            return redirect('hydra_index')
     template = 'hydra/index.html'
-    context = {}
+    context = {
+        'form': form,
+    }
     return render(request, template, context)

@@ -1,0 +1,8 @@
+{% for link in article_links %}
+    <li>
+        <a href="{{ link.url }}">
+            <i class="fa fa-link">&nbsp;</i>
+            {{ link.journal }}: {{ link.article.pk }}
+        </a>
+    </li>
+{% endfor %}

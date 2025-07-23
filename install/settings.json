@@ -1,0 +1,17 @@
+[
+  {
+    "group": {
+      "name": "plugin:hydra"
+    },
+    "setting": {
+      "description": "Enable Hydra Sidebar",
+      "is_translatable": true,
+      "name": "hydra_enable_sidebar",
+      "pretty_name": "Enable Hydra Sidebar",
+      "type": "char"
+    },
+    "value": {
+      "default": ""
+    }
+  }
+]
