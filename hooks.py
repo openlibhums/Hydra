@@ -4,11 +4,10 @@ from django.db.models import Q, Subquery
 from django.template.loader import render_to_string
 from django.utils.translation import get_language_info
 
-from plugins.hydra import models
+from plugins.hydra import models, utils
 from utils.logger import get_logger
-from utils.function_cache import cache
+
 from utils import setting_handler
-from submission import models as submission_models
 
 
 logger = get_logger(__name__)
@@ -140,7 +139,7 @@ def editor_nav_article_switcher(context):
         "to_article__journal",
     ).all()
 
-    linked_articles = get_interlinked_articles(article.pk)
+    linked_articles = utils.get_interlinked_articles(article.pk)
     linked_articles = {a for a in linked_articles if a.pk != article.pk}
 
     if not linked_articles:
@@ -177,33 +176,3 @@ def editor_nav_article_switcher(context):
     )
 
 
-@cache(600)
-def get_interlinked_articles(article_id):
-    """
-    Return related articles: direct children and siblings via parent relationship.
-    """
-    try:
-        article = submission_models.Article.objects.get(pk=article_id)
-    except submission_models.Article.DoesNotExist:
-        return set()
-
-    parent_ids = models.LinkedArticle.objects.filter(
-        to_article=article
-    ).values("from_article")
-
-    relatives = models.LinkedArticle.objects.filter(
-        Q(from_article=article) | Q(from_article__in=Subquery(parent_ids))
-    ).select_related(
-        "from_article__journal",
-        "to_article__journal",
-    ).distinct()
-
-    linked_articles = set()
-
-    for link in relatives:
-        if link.from_article and link.from_article.pk != article.pk:
-            linked_articles.add(link.from_article)
-        if link.to_article and link.to_article.pk != article.pk:
-            linked_articles.add(link.to_article)
-
-    return linked_articles

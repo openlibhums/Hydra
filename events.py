@@ -1,6 +1,10 @@
-from plugins.hydra import models
+from django.core.management import call_command
+
+from plugins.hydra import models, events
+
 
 def distribute_articles(**kwargs):
+    print('We are distributing articles')
     article = kwargs.get('article')
     journal = article.journal
 
@@ -19,5 +23,28 @@ def distribute_articles(**kwargs):
         link.to_journal for link in
         linked_group.journal_link.select_related("to_journal")
     )
+
+    # Exclude the current journal
+    group_journals.discard(journal)
+
+    results = []
+
+    for journal in group_journals:
+        try:
+            call_command(
+                "copy_articles",
+                journal.code,
+                article=article.pk,
+                target_lang="en",
+            )
+            results.append(
+                {
+                    "journal": journal.code,
+                    "status": "success",
+                }
+            )
+        except Exception as e:
+            print(e)
+
 
     return group_journals

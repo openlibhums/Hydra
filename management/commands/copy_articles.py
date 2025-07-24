@@ -1,5 +1,6 @@
 import os
 import shutil
+import itertools
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -42,6 +43,11 @@ class Command(BaseCommand):
             help='Optional single article ID to copy',
         )
         parser.add_argument(
+            "--stage",
+            type=str,
+            help="Optional stage to copy articles into"
+        )
+        parser.add_argument(
             '--target-lang',
             type=str,
             help='Language code of the target journal eg "es" or "fr"',
@@ -52,6 +58,7 @@ class Command(BaseCommand):
         target_code = options['target']
         issue_id = options.get('issue')
         article_id = options.get('article')
+        stage = options.get('stage')
         self.target_lang = options.get('target_lang')
 
         try:
@@ -70,10 +77,10 @@ class Command(BaseCommand):
 
         for article in articles:
             with transaction.atomic():
-                new_article = self.copy_article(article, target_journal)
+                new_article = self.copy_article(article, target_journal, stage)
                 self.link_articles(article, new_article)
 
-    def copy_article(self, article, target_journal):
+    def copy_article(self, article, target_journal, stage):
         # Check for existing pubid in target journal
         pub_id = article.pk
         existing = identifiers_models.Identifier.objects.filter(
@@ -99,7 +106,7 @@ class Command(BaseCommand):
             new_article = submission_models.Article(
                 journal=target_journal,
                 language=article.language,
-                stage=article.stage,
+                stage=stage if stage else article.stage,
                 is_import=True,
             )
 
@@ -124,7 +131,7 @@ class Command(BaseCommand):
         new_article.last_page = article.last_page
         new_article.page_numbers = article.page_numbers
         new_article.total_pages = article.total_pages
-        new_article.stage = article.stage
+        new_article.stage = stage if stage else article.stage
         new_article.publication_fees = article.publication_fees
         new_article.submission_requirements = article.submission_requirements
         new_article.copyright_notice = article.copyright_notice
@@ -176,7 +183,7 @@ class Command(BaseCommand):
             )
 
         # ManyToMany
-        new_article.authors.set(article.authors.all())
+        #new_article.authors.set(article.authors.all())
         new_article.publisher_notes.set(article.publisher_notes.all())
 
         # Keywords
@@ -364,14 +371,7 @@ class Command(BaseCommand):
         return '{0}/{1}'.format(doi_prefix, doi_suffix)
 
     def link_articles(self, source_article, target_article):
-        to_link = identifiers_models.Identifier.objects.filter(
-            id_type="linkid",
-            identifier=source_article.pk,
+        models.LinkedArticle.objects.get_or_create(
+            from_article=source_article,
+            to_article=target_article,
         )
-        if to_link.count() < 2:
-            return
-        for a, b in itertools.permutations(to_link, 2):
-            models.LinkedArticle.objects.get_or_create(
-                from_article=a,
-                to_article=b
-            )

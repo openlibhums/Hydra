@@ -25,7 +25,6 @@ class HydraAdminForm(forms.Form):
             pretty='Enable Hydra Sidebar',
             types='boolean'
         )
-        print(hydra_enable_sidebar_setting)
         self.fields[
             'hydra_enable_sidebar'
         ].initial = hydra_enable_sidebar_setting.processed_value

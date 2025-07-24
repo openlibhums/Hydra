@@ -1,0 +1,77 @@
+{% extends "admin/core/base.html" %}
+{% load fqdn %}
+{% block title %}
+  #{{ article.pk }} - Hydra Plugin
+{% endblock %}
+
+{% block title-section %}
+  #{{ article.pk }} - Hydra Plugin
+{% endblock %}
+
+{% block breadcrumbs %}
+  {{ block.super }}
+  <li><a href="{% url 'hydra_handshake_url' %}">Hydra Article List</a></li>
+  <li>Distribute Article #{{ article.pk }}</li>
+{% endblock %}
+
+{% block body %}
+  <div class="row expanded">
+    <div class="large-6 small-12 columns">
+      <div class="box">
+        <div class="title-area">
+          <h2>Distribute Article #{{ article.pk }} {{ article.safe_title }}</h2>
+        </div>
+        <div class="content">
+          <p>{{ request.journal.name }} is linked to these journals:</p>
+          <ul>
+            {% for journal in linked_journals %}
+              <li>{{ journal.name }}</li>
+              {% empty %}
+              <li>No linked journals</li>
+            {% endfor %}
+          </ul>
+          <p>
+            You can distribute the article to one or all of the journals.
+          </p>
+
+          <div class="row">
+            <div class="large-8 medium-10 small-12 columns">
+              <div class="button-group small stacked">
+                <form method="POST">
+                  {% csrf_token %}
+                  {% for journal in linked_journals %}
+                    <button class="button" name="code_to_distribute" value="{{ journal.code }}">
+                      Distribute to {{ journal.name }}
+                    </button>
+                  {% endfor %}
+                  <button class="button" name="code_to_distribute" value="all">
+                    Distribute to all journals
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% if linked_articles %}
+    <div class="large-6 medium-12 columns">
+      <div class="box">
+        <div class="title-area">
+          <h2>Linked Articles</h2>
+        </div>
+        <div class="content">
+          <ul>
+          {% for article in linked_articles %}
+            {% external_journal_url article.journal article.current_workflow_element.jump_url article.pk as external_url %}
+            <a href="{{ external_url }}">Go</a>
+
+            <li>{{ article.journal.code }}: [{{ article.pk }}] {{ article.safe_title }}</li>
+          {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+{% endblock %}
