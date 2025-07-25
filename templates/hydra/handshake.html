@@ -1,9 +1,64 @@
 {% extends "admin/core/base.html" %}
+{% load fqdn dates %}
+{% block title %}
+  Article List - Hydra Plugin
+{% endblock %}
+
+{% block title-section %}
+  Article List - Hydra Plugin
+{% endblock %}
+
+{% block breadcrumbs %}
+  {{ block.super }}
+  <li><a href="{% url 'hydra_handshake_url' %}">Hydra Article List</a></li>
+{% endblock %}
 
 {% block body %}
-  <ul>
-  {% for article in articles_in_stage %}
-    <li><a href="{% url 'hydra_jump_url' article.pk %}">{{ article.safe_title }}</a></li>
-  {% endfor %}
-  </ul>
+  <div class="rummage-portal">
+    <div>
+      {% include "admin/elements/list_filters.html" %}
+    </div>
+
+    <div class="box">
+      <div class="title-area">
+        <h2>Hydra Articles</h2>
+      </div>
+      {% include "common/elements/sorting.html" with form_id=facet_form.id %}
+
+      {% for article in article_list %}
+        <div class="callout">
+          <h3>
+            <strong>{{ article.safe_title }}</strong>
+          </h3>
+          <div class="rummage-result-details">
+            <dl>
+              {% include "admin/elements/layout/key_value_above.html" with key="ID" value=article.pk %}
+              {% include "admin/elements/layout/key_value_above.html" with key="Section" value=article.section.name %}
+              {% include "admin/elements/layout/key_value_above.html" with key="Authors" value=article.author_list %}
+            </dl>
+
+            <div class="flex portrait-column gap-2">
+              <dl>
+                {% include "admin/elements/layout/key_value_above.html" with key="Date Submitted" value=article.date_submitted|date_human %}
+                {% include "admin/elements/layout/key_value_above.html" with key="Date Accepted" value=article.date_accepted|date_human %}
+              </dl>
+
+              <div>
+                <h4 class="uppercase">Actions</h4>
+                <div class="flex portrait-row landscape-column gap-0-5 items-start">
+                  <a class="button secondary hollow normal"
+                     href="{% url 'hydra_jump_url' article.pk %}">
+                    View Article
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <p><strong>{% trans 'No articles to display.' %}</strong></p>
+      {% endfor %}
+
+      {% include "common/elements/pagination.html" with form_id=facet_form.id %}
+    </div>
 {% endblock %}

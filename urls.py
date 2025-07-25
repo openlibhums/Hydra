@@ -14,7 +14,7 @@ urlpatterns = [
     ),
     re_path(
         r'articles/',
-        views.hydra_handshake_url,
+        views.HydraHandshakeView.as_view(),
         name="hydra_handshake_url",
     ),
     re_path(

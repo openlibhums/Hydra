@@ -2,6 +2,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render, redirect, reverse, get_object_or_404
 from django.contrib import messages
 from django.core.management import call_command
+from django.utils.translation import gettext as _
 
 try:
     from plugins.typesetting import plugin_settings, models, logic, security
@@ -14,7 +15,7 @@ from plugins.hydra import forms, utils, events, plugin_settings
 from submission import models as submission_models
 from journal import models as journal_models
 from submission.models import Article
-from core import models as core_models
+from core import models as core_models, views as core_views
 
 from django.http import JsonResponse, HttpResponseNotFound
 from django.views.decorators.http import require_GET
@@ -48,20 +49,43 @@ def index(request):
     return render(request, template, context)
 
 
-@decorators.editor_user_required
-def hydra_handshake_url(request):
-    articles_in_stage = submission_models.Article.objects.filter(
-        stage=plugin_settings.STAGE,
-    )
-    template = 'hydra/handshake.html'
-    context = {
-        'articles_in_stage': articles_in_stage,
-    }
-    return render(
-        request,
-        template,
-        context,
-    )
+class HydraHandshakeView(core_views.GenericFacetedListView):
+    """
+    Faceted search view for articles in the Hydra plugin.
+    Lists only articles from the current journal and in the 'hydra' stage.
+    """
+
+    model = submission_models.Article
+    template_name = 'hydra/handshake.html'
+
+    def get_facets(self):
+        facets = {
+            'q': {
+                'type': 'search',
+                'field_label': _('Search'),
+            },
+        }
+        return self.filter_facets_if_journal(facets)
+
+    def get_order_by_choices(self):
+        return [
+            ('title', _('Title A–Z')),
+            ('-title', _('Title Z–A')),
+            ('-date_submitted', _('Newest')),
+            ('date_submitted', _('Oldest')),
+        ]
+
+    def get_queryset(self, params_querydict=None):
+        queryset = super().get_queryset(params_querydict)
+        return queryset.filter(
+            journal=self.request.journal,
+            stage=plugin_settings.STAGE,
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['hydra_article_search'] = True
+        return context
 
 
 @decorators.editor_user_required
