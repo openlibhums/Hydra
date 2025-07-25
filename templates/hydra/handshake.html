@@ -1,5 +1,5 @@
 {% extends "admin/core/base.html" %}
-{% load fqdn dates %}
+{% load fqdn %}
 {% block title %}
   Article List - Hydra Plugin
 {% endblock %}
@@ -39,8 +39,8 @@
 
             <div class="flex portrait-column gap-2">
               <dl>
-                {% include "admin/elements/layout/key_value_above.html" with key="Date Submitted" value=article.date_submitted|date_human %}
-                {% include "admin/elements/layout/key_value_above.html" with key="Date Accepted" value=article.date_accepted|date_human %}
+                {% include "admin/elements/layout/key_value_above.html" with key="Date Submitted" value=article.date_submitted %}
+                {% include "admin/elements/layout/key_value_above.html" with key="Date Accepted" value=article.date_accepted %}
               </dl>
 
               <div>
