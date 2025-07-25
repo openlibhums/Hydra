@@ -50,7 +50,10 @@ class Command(BaseCommand):
         parser.add_argument(
             '--target-lang',
             type=str,
-            help='Language code of the target journal eg "es" or "fr"',
+            help=(
+                'Language code of the target journal eg "es" or "fr".'
+                ' will use the journal default if not provided',
+            ),
         )
 
     def handle(self, *args, **options):
@@ -154,9 +157,12 @@ class Command(BaseCommand):
             setattr(new_article, f"title_{lang_code}",
                     getattr(article, f"title_{lang_code}", None))
 
-        if self.target_lang:
-            new_article.title_en = getattr(article, f"title_{self.target_lang}")
-            new_article.title = getattr(article, f"title_{self.target_lang}")
+        # TODO: Remove once outgoing feeds/apis support multilang
+        language = self.target_lang or get_journal_lang_code(new_article.journal)
+        if language:
+            # Set default / en language to translated language
+            new_article.title_en = getattr(article, f"title_{language}")
+            new_article.title = getattr(article, f"title_{language}")
 
         # Section
         if article.section:
@@ -183,7 +189,7 @@ class Command(BaseCommand):
             )
 
         # ManyToMany
-        #new_article.authors.set(article.authors.all())
+        new_article.authors.set(article.authors.all())
         new_article.publisher_notes.set(article.publisher_notes.all())
 
         # Keywords
@@ -302,7 +308,11 @@ class Command(BaseCommand):
         return new_file
 
     def copy_galleys(self, source_article, target_article):
-        for galley in source_article.galley_set.filter(label__icontains=self.target_lang):
+        language = self.target_lang or get_journal_lang_code(target_article.journal)
+        if not language:
+            self.stderr.write(self.style.ERROR("No language provided and no default found"))
+            return
+        for galley in source_article.galley_set.filter(label__icontains=f"_{language}"):
             new_galley = core_models.Galley.objects.get(pk=galley.pk)
             new_galley.pk = None
             new_galley.article = target_article
@@ -375,3 +385,15 @@ class Command(BaseCommand):
             from_article=source_article,
             to_article=target_article,
         )
+
+def get_journal_lang_code(journal):
+    language = None
+    try:
+        language = journal.get_setting(
+            group_name="general",
+            setting_name="default_journal_language",
+        )
+    except Exception:
+        pass
+
+    return language

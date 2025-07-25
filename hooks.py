@@ -62,7 +62,8 @@ def language_header_switcher(context):
     # Strip the journal-specific path prefix
     prefix = f"/{journal.code}/"
     stripped_path = path[len(prefix):] if path.startswith(prefix) else path
-    corrected_path = "/issues/" if stripped_path.startswith("issue/") else f"/{stripped_path}"
+    normalised_path = stripped_path.lstrip("/")
+    corrected_path = "/issues/" if normalised_path.startswith("issue/") else f"/{normalised_path}"
 
     # Build the full set of group journals
     group_journals = {linked_group.journal}
@@ -85,13 +86,15 @@ def language_header_switcher(context):
             continue
 
         if article:
-            related = article.linked_from.select_related("from_article__journal", "to_article__journal").all()
-            related |= article.linked_to.select_related("from_article__journal", "to_article__journal").all()
-            if not any(
-                a.to_article.journal_id == linked_journal.pk
-                or a.from_article.journal_id == linked_journal.pk
-                for a in related
-            ):
+            parents_subq = models.LinkedArticle.objects.filter(
+                    to_article=article
+             ).values("from_article")
+
+            linked_articles = models.LinkedArticle.objects.filter(
+                Q(from_article=article) | Q(from_article__in=Subquery(parents_subq))
+            ).exclude(to_article=article).select_related("to_article__journal")
+
+            if not linked_articles.filter(to_article__journal=linked_journal).exists():
                 continue
 
         links.append({
