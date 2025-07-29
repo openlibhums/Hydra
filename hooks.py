@@ -1,11 +1,13 @@
 from urllib.parse import urlparse
 
 from django.db.models import Q, Subquery
+from django.http import Http404
 from django.template.loader import render_to_string
 from django.utils.translation import get_language_info
 
 from plugins.hydra import models, utils
 from utils.logger import get_logger
+from submission import models as submission_models
 
 from utils import setting_handler
 
@@ -36,7 +38,7 @@ def sidebar_article_links(context, article):
 
 def language_header_switcher(context):
     """
-    Provides a language switcher for linked journal sites.
+    Provides a language switcher for journals linked by LinkedArticle records.
     """
 
     request = context["request"]
@@ -44,38 +46,45 @@ def language_header_switcher(context):
     article = context.get("article")
     path = request.path
 
-    if not journal:
+    if not journal or not article:
         return ""
 
-    # Find the linked group this journal belongs to
-    try:
-        linked_group = journal.linked_journals
-    except models.LinkedJournals.DoesNotExist:
-        try:
-            linked_group = models.LinkedJournals.objects.get(links=journal)
-        except models.LinkedJournals.DoesNotExist:
-            return ""
+    # Build set of transitive linked article PKs
+    visited = set()
+    to_visit = {article.pk}
 
-    if not linked_group.journal_link.exists():
-        return ""
+    while to_visit:
+        current_ids = to_visit
+        to_visit = set()
 
-    # Strip the journal-specific path prefix
+        links = models.LinkedArticle.objects.filter(
+            Q(from_article_id__in=current_ids) | Q(to_article_id__in=current_ids)
+        ).values("from_article_id", "to_article_id")
+
+        for link in links:
+            from_id = link["from_article_id"]
+            to_id = link["to_article_id"]
+
+            if from_id not in visited:
+                to_visit.add(from_id)
+            if to_id not in visited:
+                to_visit.add(to_id)
+
+        visited.update(current_ids)
+
+    # Get all linked articles excluding the current one
+    linked_articles = submission_models.Article.objects.filter(
+        pk__in=visited - {article.pk}
+    ).select_related("journal")
+
+    links = []
     prefix = f"/{journal.code}/"
     stripped_path = path[len(prefix):] if path.startswith(prefix) else path
     normalised_path = stripped_path.lstrip("/")
     corrected_path = "/issues/" if normalised_path.startswith("issue/") else f"/{normalised_path}"
 
-    # Build the full set of group journals
-    group_journals = {linked_group.journal}
-    group_journals.update(
-        link.to_journal for link in linked_group.journal_link.select_related("to_journal")
-    )
-
-    links = []
-
-    for linked_journal in group_journals:
-        if linked_journal.pk == journal.pk:
-            continue
+    for linked_article in linked_articles:
+        linked_journal = linked_article.journal
 
         try:
             linked_language = linked_journal.get_setting(
@@ -84,18 +93,6 @@ def language_header_switcher(context):
             )
         except Exception:
             continue
-
-        if article:
-            parents_subq = models.LinkedArticle.objects.filter(
-                    to_article=article
-             ).values("from_article")
-
-            linked_articles = models.LinkedArticle.objects.filter(
-                Q(from_article=article) | Q(from_article__in=Subquery(parents_subq))
-            ).exclude(to_article=article).select_related("to_article__journal")
-
-            if not linked_articles.filter(to_article__journal=linked_journal).exists():
-                continue
 
         links.append({
             "name_local": get_language_info(linked_language)["name_local"],
@@ -111,6 +108,7 @@ def language_header_switcher(context):
             "language_links": links,
         }
     )
+
 
 
 def editor_nav_article_switcher(context):
