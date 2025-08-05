@@ -38,7 +38,8 @@ def sidebar_article_links(context, article):
 
 def language_header_switcher(context):
     """
-    Provides a language switcher for journals linked by LinkedArticle records.
+    Provides a language switcher for journals linked by LinkedArticle records,
+    or (when not on an article page) switches to equivalent paths on linked journals.
     """
 
     request = context["request"]
@@ -46,36 +47,8 @@ def language_header_switcher(context):
     article = context.get("article")
     path = request.path
 
-    if not journal or not article:
+    if not journal:
         return ""
-
-    # Build set of transitive linked article PKs
-    visited = set()
-    to_visit = {article.pk}
-
-    while to_visit:
-        current_ids = to_visit
-        to_visit = set()
-
-        links = models.LinkedArticle.objects.filter(
-            Q(from_article_id__in=current_ids) | Q(to_article_id__in=current_ids)
-        ).values("from_article_id", "to_article_id")
-
-        for link in links:
-            from_id = link["from_article_id"]
-            to_id = link["to_article_id"]
-
-            if from_id not in visited:
-                to_visit.add(from_id)
-            if to_id not in visited:
-                to_visit.add(to_id)
-
-        visited.update(current_ids)
-
-    # Get all linked articles excluding the current one
-    linked_articles = submission_models.Article.objects.filter(
-        pk__in=visited - {article.pk}
-    ).select_related("journal")
 
     links = []
     prefix = f"/{journal.code}/"
@@ -83,21 +56,92 @@ def language_header_switcher(context):
     normalised_path = stripped_path.lstrip("/")
     corrected_path = "/issues/" if normalised_path.startswith("issue/") else f"/{normalised_path}"
 
-    for linked_article in linked_articles:
-        linked_journal = linked_article.journal
+    if article:
+        # Build set of transitive linked article PKs
+        visited = set()
+        to_visit = {article.pk}
 
+        while to_visit:
+            current_ids = to_visit
+            to_visit = set()
+
+            linked = models.LinkedArticle.objects.filter(
+                Q(from_article_id__in=current_ids) | Q(to_article_id__in=current_ids)
+            ).values("from_article_id", "to_article_id")
+
+            for link in linked:
+                from_id = link["from_article_id"]
+                to_id = link["to_article_id"]
+
+                if from_id not in visited:
+                    to_visit.add(from_id)
+                if to_id not in visited:
+                    to_visit.add(to_id)
+
+            visited.update(current_ids)
+
+        linked_articles = submission_models.Article.objects.filter(
+            pk__in=visited - {article.pk},
+        ).select_related("journal")
+
+        for linked_article in linked_articles:
+            linked_journal = linked_article.journal
+
+            try:
+                linked_language = linked_journal.get_setting(
+                    group_name="general",
+                    setting_name="default_journal_language",
+                )
+            except Exception:
+                continue
+
+            links.append({
+                "name_local": get_language_info(linked_language)["name_local"],
+                "url": linked_journal.site_url(path=corrected_path),
+            })
+
+    else:
+        # No article: get all journals in the same LinkedJournals group
         try:
-            linked_language = linked_journal.get_setting(
-                group_name="general",
-                setting_name="default_journal_language",
-            )
-        except Exception:
-            continue
+            linked_set = journal.linked_journals
+        except models.LinkedJournals.DoesNotExist:
+            try:
+                journal_link = models.JournalLink.objects.get(to_journal=journal)
+                linked_set = journal_link.parent
+            except models.JournalLink.DoesNotExist:
+                linked_set = None
 
-        links.append({
-            "name_local": get_language_info(linked_language)["name_local"],
-            "url": linked_journal.site_url(path=corrected_path),
-        })
+        if linked_set:
+            for linked_journal in linked_set.links.all():
+                if linked_journal == journal:
+                    continue
+
+                try:
+                    linked_language = linked_journal.get_setting(
+                        group_name="general",
+                        setting_name="default_journal_language",
+                    )
+                except Exception:
+                    continue
+
+                links.append({
+                    "name_local": get_language_info(linked_language)["name_local"],
+                    "url": linked_journal.site_url(path=corrected_path),
+                })
+
+            # Include parent if we're a child
+            if linked_set.journal != journal:
+                try:
+                    parent_language = linked_set.journal.get_setting(
+                        group_name="general",
+                        setting_name="default_journal_language",
+                    )
+                    links.append({
+                        "name_local": get_language_info(parent_language)["name_local"],
+                        "url": linked_set.journal.site_url(path=corrected_path),
+                    })
+                except Exception:
+                    pass
 
     if not links:
         return ""
