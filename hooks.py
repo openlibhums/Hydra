@@ -51,10 +51,18 @@ def language_header_switcher(context):
         return ""
 
     links = []
+
+    # Normalise path
     prefix = f"/{journal.code}/"
     stripped_path = path[len(prefix):] if path.startswith(prefix) else path
     normalised_path = stripped_path.lstrip("/")
-    corrected_path = "/issues/" if normalised_path.startswith("issue/") else f"/{normalised_path}"
+
+    if not normalised_path:
+        corrected_path = "/"
+    elif normalised_path.startswith("issue/"):
+        corrected_path = "/issues/"
+    else:
+        corrected_path = f"/{normalised_path}"
 
     if article:
         # Build set of transitive linked article PKs
@@ -101,7 +109,7 @@ def language_header_switcher(context):
             })
 
     else:
-        # No article: get all journals in the same LinkedJournals group
+        # No article: find the LinkedJournals group
         try:
             linked_set = journal.linked_journals
         except models.LinkedJournals.DoesNotExist:
@@ -129,7 +137,7 @@ def language_header_switcher(context):
                     "url": linked_journal.site_url(path=corrected_path),
                 })
 
-            # Include parent if we're a child
+            # Add parent journal if we're not it
             if linked_set.journal != journal:
                 try:
                     parent_language = linked_set.journal.get_setting(
@@ -152,6 +160,7 @@ def language_header_switcher(context):
             "language_links": links,
         }
     )
+
 
 
 
