@@ -21,6 +21,24 @@ class LinkType(models.TextChoices):
     RETRACTION = "retraction", _("Retraction")
     WITHDRAWAL = "withdrawal", _("Withdrawal")
 
+
+#: Link types that map to a Crossref ``<update>`` (editorially significant changes).
+CROSSREF_UPDATES = frozenset({
+    LinkType.ADDENDUM,
+    LinkType.CLARIFICATION,
+    LinkType.CORRECTION,
+    LinkType.CORRIGENDUM,
+    LinkType.ERRATUM,
+    LinkType.EXPRESSION_OF_CONCERN,
+    LinkType.NEW_EDITION,
+    LinkType.NEW_VERSION,
+    LinkType.PARTIAL_RETRACTION,
+    LinkType.REMOVAL,
+    LinkType.RETRACTION,
+    LinkType.WITHDRAWAL,
+})
+
+
 class JournalLink(models.Model):
 
 
