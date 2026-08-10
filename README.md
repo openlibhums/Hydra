@@ -22,6 +22,9 @@ Hydra is a **Janeway plugin** that enables
   - Define the relationship between two articles
   - Display the relationship in the two articles' landing pages
   - Send the relationship to meta-engines such as crossref
+  - Order the articles linked to the same "from article" (see `LinkedArticle.order`),
+    which matters for sets such as commentaries, where an introductory paper gathers
+    a number of invited contributions in a well-defined sequence
 
 
 ---
