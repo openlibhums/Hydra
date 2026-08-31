@@ -13,13 +13,20 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def sidebar_article_links(context, article):
+def sidebar_article_links(context, article=None):
     """ Provides an HTML list of links to linked articles
     :param context: The context passed to the source template for rendering
     :type context: dict
-    :param Article: The Article on which to match the pubid across journals
-    :type Article: An instance of submission.models.Article
+    :param article: The Article on which to match the pubid across journals.
+        When called as a template hook (e.g. ``{% hook 'article_sidebar' %}``)
+        only ``context`` is passed, so the article is taken from the context.
+    :type article: An instance of submission.models.Article
     """
+    if article is None:
+        article = context.get("article")
+    if article is None:
+        return ""
+
     parents_subQ = models.LinkedArticle.objects.filter(
         to_article=article).values("from_article")
     # We want direct child relations or siblings via parent relationship 

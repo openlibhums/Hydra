@@ -19,8 +19,8 @@ class ArticleLinkAdmin(admin.ModelAdmin):
 class JournalLinkAdmin(admin.ModelAdmin):
     list_display = ("parent", "to_journal", "link_type")
     search_fields = (
-        "parent__journal__title",
-        "to_journal__title",
+        "parent__journal__code",
+        "to_journal__code",
     )
     list_filter = ("link_type", "parent__journal")
     raw_id_fields = ("parent", "to_journal")
@@ -30,5 +30,5 @@ class JournalLinkAdmin(admin.ModelAdmin):
 @admin.register(models.LinkedJournals)
 class LinkedJournalsAdmin(admin.ModelAdmin):
     list_display = ("journal",)
-    search_fields = ("journal__title",)
+    search_fields = ("journal__code",)
     raw_id_fields = ("journal",)
