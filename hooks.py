@@ -34,6 +34,9 @@ def sidebar_article_links(context, article):
             relation.language_label = linked_article_language_label(
                 relation.to_article,
             )
+            relation.language_title = linked_article_language_title(
+                relation.to_article,
+            )
         return render_to_string(
             "hydra/elements/sidebar_links.html",
             {"relatives": relatives},
@@ -53,6 +56,19 @@ def linked_article_language_label(article):
         except KeyError:
             pass
     return article.get_language_display()
+
+
+def linked_article_language_title(article):
+    """
+    Returns a linked article's title in its journal's language, rather than
+    the language of the site being viewed, falling back to the usual title.
+    """
+    language = utils.journal_language_code(article.journal)
+    if language:
+        title = getattr(article, "title_{}".format(language), None)
+        if title:
+            return title
+    return article.title
 
 
 def language_header_switcher(context):

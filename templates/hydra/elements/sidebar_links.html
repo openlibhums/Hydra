@@ -6,7 +6,7 @@
         {% for relation in relations %}
         <li>
             <a href="{{ relation.to_article.url }}" target="_blank">
-                {{ relation.language_label }}: {{ relation.to_article.title }}
+                {{ relation.language_label }}: {{ relation.language_title }}
             </a>
         </li>
         {% endfor %}
