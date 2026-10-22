@@ -1,5 +1,6 @@
 from django.core.management import call_command
 from django.db.models import Q, Subquery
+from django.utils.translation import get_language_info
 
 from plugins.hydra import models
 from utils.function_cache import cache
@@ -37,8 +38,35 @@ def distribute_articles(article, journals):
             journal.code,
             article=article.pk,
             stage="Editor Copyediting",
-            target_lang="en",
         )
+    return None
+
+
+def journal_language_code(journal):
+    """Returns the journal's default language as a Django code, e.g. 'es'."""
+    try:
+        return journal.get_setting(
+            group_name="general",
+            setting_name="default_journal_language",
+        )
+    except Exception:
+        return None
+
+
+def article_language_for(language_code):
+    """
+    Maps a Django language code (e.g. 'es') to the ISO 639-3 code that
+    Article.language uses (e.g. 'spa'), matching on the English name.
+    """
+    if not language_code:
+        return None
+    try:
+        name = get_language_info(language_code.split("-")[0])["name"]
+    except KeyError:
+        return None
+    for code, label in submission_models.LANGUAGE_CHOICES:
+        if str(label).lower() == name.lower():
+            return code
     return None
 
 @cache(600)

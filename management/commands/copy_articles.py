@@ -12,6 +12,7 @@ from core import models as core_models
 from identifiers import models as identifiers_models
 from utils import setting_handler, render_template
 from plugins.hydra import models
+from plugins.hydra import utils as hydra_utils
 
 
 class Command(BaseCommand):
@@ -163,6 +164,10 @@ class Command(BaseCommand):
             # Set default / en language to translated language
             new_article.title_en = getattr(article, f"title_{language}")
             new_article.title = getattr(article, f"title_{language}")
+            new_article.language = (
+                hydra_utils.article_language_for(language)
+                or new_article.language
+            )
 
         # Section
         if article.section:

@@ -29,11 +29,30 @@ def sidebar_article_links(context, article):
         Q(from_article=article) | Q(from_article__in=Subquery(parents_subQ))
     ).exclude(to_article=article).distinct()
     if relatives.exists():
+        relatives = list(relatives.select_related("to_article__journal"))
+        for relation in relatives:
+            relation.language_label = linked_article_language_label(
+                relation.to_article,
+            )
         return render_to_string(
             "hydra/elements/sidebar_links.html",
             {"relatives": relatives},
         )
     return ""
+
+
+def linked_article_language_label(article):
+    """
+    Labels a linked article by its journal's language, as the header
+    switcher does, falling back to the article's own language.
+    """
+    language = utils.journal_language_code(article.journal)
+    if language:
+        try:
+            return get_language_info(language)["name_local"]
+        except KeyError:
+            pass
+    return article.get_language_display()
 
 
 def language_header_switcher(context):
