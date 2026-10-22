@@ -30,21 +30,16 @@ def get_linked_journals(article):
 
     return group_journals
 
-
 def distribute_articles(article, journals):
     for journal in journals:
-        try:
-            call_command(
-                "copy_articles",
-                journal.code,
-                article=article.pk,
-                stage="Editor Copyediting",
-                target_lang="en",
-            )
-        except Exception as e:
-            return e
+        call_command(
+            "copy_articles",
+            journal.code,
+            article=article.pk,
+            stage="Editor Copyediting",
+            target_lang="en",
+        )
     return None
-
 
 @cache(600)
 def get_interlinked_articles(article_id):

@@ -177,7 +177,6 @@ def distribute_articles_view(request, article_id):
                 article.journal.code,
                 journal_code=journal.code,
                 article=article.pk,
-                target_lang='en',
             )
             results.append({
                 "journal": journal.code,

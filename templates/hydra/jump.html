@@ -54,26 +54,5 @@
         </div>
       </div>
     </div>
-    <!-- This sectio will be revived once the stateless url tag actually works.
-    {% if linked_articles %}
-    <div class="large-6 medium-12 columns">
-      <div class="box">
-        <div class="title-area">
-          <h2>Linked Articles</h2>
-        </div>
-        <div class="content">
-          <ul>
-          {% for article in linked_articles %}
-            {% external_journal_url article.journal article.current_workflow_element.jump_url article.pk as external_url %}
-            <a href="{{ external_url }}">Go</a>
-
-            <li>{{ article.journal.code }}: [{{ article.pk }}] {{ article.safe_title }}</li>
-          {% endfor %}
-          </ul>
-        </div>
-      </div>
-    </div>
-    {% endif %}
-    -->
   </div>
 {% endblock %}

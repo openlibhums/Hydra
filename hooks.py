@@ -52,7 +52,7 @@ def language_header_switcher(context):
 
     links = []
 
-    # Normalise path
+    # Normalise path (e.g. homepage, issue pages, etc.)
     prefix = f"/{journal.code}/"
     stripped_path = path[len(prefix):] if path.startswith(prefix) else path
     normalised_path = stripped_path.lstrip("/")
@@ -94,7 +94,8 @@ def language_header_switcher(context):
 
         for linked_article in linked_articles:
             linked_journal = linked_article.journal
-
+            if linked_journal.code == 'ilr':
+                continue
             try:
                 linked_language = linked_journal.get_setting(
                     group_name="general",
@@ -109,17 +110,18 @@ def language_header_switcher(context):
             })
 
     else:
-        # No article: find the LinkedJournals group
+        # No article: use journal linkage
         try:
+            # If current journal is the parent
             linked_set = journal.linked_journals
         except models.LinkedJournals.DoesNotExist:
-            try:
-                journal_link = models.JournalLink.objects.get(to_journal=journal)
-                linked_set = journal_link.parent
-            except models.JournalLink.DoesNotExist:
-                linked_set = None
+            # Otherwise find the parent set it belongs to
+            linked_set = models.LinkedJournals.objects.filter(
+                links=journal
+            ).first()
 
         if linked_set:
+            # Add all linked journals (siblings)
             for linked_journal in linked_set.links.all():
                 if linked_journal == journal:
                     continue
@@ -137,7 +139,7 @@ def language_header_switcher(context):
                     "url": linked_journal.site_url(path=corrected_path),
                 })
 
-            # Add parent journal if we're not it
+            # Add the parent journal (if not current)
             if linked_set.journal != journal:
                 try:
                     parent_language = linked_set.journal.get_setting(
@@ -160,7 +162,6 @@ def language_header_switcher(context):
             "language_links": links,
         }
     )
-
 
 
 
@@ -220,6 +221,7 @@ def editor_nav_article_switcher(context):
             "article": a,
             "journal": a.journal.code if hasattr(a, "journal") else "",
             "url": cleaned_path,
+            "domain": a.journal.domain,
         })
 
     return render_to_string(
