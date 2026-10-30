@@ -7,10 +7,10 @@ PLUGIN_NAME = 'Hydra'
 DISPLAY_NAME = 'Hydra'
 DESCRIPTION = 'A Plugin for multi-journal publishing and linking'
 AUTHOR = 'Open Library of Humanities'
-VERSION = '0.1'
+VERSION = '0.2.0'
 SHORT_NAME = 'hydra'
 MANAGER_URL = 'hydra_index'
-JANEWAY_VERSION = '1.7.4'
+JANEWAY_VERSION = '1.8.0'
 
 # Workflow Settings
 IS_WORKFLOW_PLUGIN = True
