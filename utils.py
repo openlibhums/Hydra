@@ -3,8 +3,11 @@ from django.db.models import Q, Subquery
 from django.utils.translation import get_language_info
 
 from plugins.hydra import models
-from utils.function_cache import cache
 from submission import models as submission_models
+from utils.logger import get_logger
+
+
+logger = get_logger(__name__)
 
 
 def get_linked_journals(article):
@@ -17,7 +20,7 @@ def get_linked_journals(article):
         try:
             linked_group = models.LinkedJournals.objects.get(links=journal)
         except models.LinkedJournals.DoesNotExist:
-            return
+            return set()
 
     # Build set of journals: primary + linked ones
     group_journals = {linked_group.journal}
@@ -31,15 +34,36 @@ def get_linked_journals(article):
 
     return group_journals
 
-def distribute_articles(article, journals):
+def distribute_articles(article, journals, stage=None):
+    """
+    Copies an article into each of the given journals and returns a result
+    dict per journal. A failure is logged and doesn't stop the other copies.
+    """
+    results = []
     for journal in journals:
-        call_command(
-            "copy_articles",
-            journal.code,
-            article=article.pk,
-            stage="Editor Copyediting",
-        )
-    return None
+        try:
+            call_command(
+                "copy_articles",
+                journal.code,
+                article=article.pk,
+                stage=stage,
+            )
+            results.append({
+                "journal": journal.code,
+                "status": "success",
+            })
+        except Exception as e:
+            logger.exception(
+                "Hydra: copying article %s to %s failed",
+                article.pk,
+                journal.code,
+            )
+            results.append({
+                "journal": journal.code,
+                "status": "error",
+                "message": str(e),
+            })
+    return results
 
 
 def journal_language_code(journal):
@@ -69,7 +93,6 @@ def article_language_for(language_code):
             return code
     return None
 
-@cache(600)
 def get_interlinked_articles(article_id):
     """
     Return related articles: direct children and siblings via parent relationship.

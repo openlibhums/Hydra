@@ -1,7 +1,7 @@
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render, redirect, reverse, get_object_or_404
 from django.contrib import messages
-from django.core.management import call_command
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 
 try:
@@ -18,7 +18,7 @@ from submission.models import Article
 from core import models as core_models, views as core_views
 
 from django.http import JsonResponse, HttpResponseNotFound
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_POST
 
 
 logger = get_logger(__name__)
@@ -49,6 +49,8 @@ def index(request):
     return render(request, template, context)
 
 
+@method_decorator(decorators.has_journal, name="dispatch")
+@method_decorator(decorators.editor_user_required, name="dispatch")
 class HydraHandshakeView(core_views.GenericFacetedListView):
     """
     Faceted search view for articles in the Hydra plugin.
@@ -98,40 +100,45 @@ def hydra_jump_url(request, article_id):
     linked_journals =  utils.get_linked_journals(
         article,
     )
-    linked_articles = utils.get_interlinked_articles(article.pk)
-    error = None
     if request.POST:
         code_to_distribute = request.POST.get('code_to_distribute')
         if code_to_distribute == 'all':
-            error = utils.distribute_articles(article, linked_journals)
+            journals = linked_journals
         else:
             journal = get_object_or_404(
                 journal_models.Journal,
                 code=code_to_distribute,
             )
-            if journal in linked_journals:
-                error = utils.distribute_articles(article, [journal])
-            else:
+            journals = [journal] if journal in linked_journals else []
+            if not journals:
                 messages.warning(
                     request,
                     f"Journal with code {code_to_distribute} not linked to this journal",
                 )
-        if error:
+
+        results = utils.distribute_articles(
+            article,
+            journals,
+            stage=submission_models.STAGE_EDITOR_COPYEDITING,
+        )
+        failed = [r["journal"] for r in results if r["status"] == "error"]
+        if failed:
             messages.error(
                 request,
-                error,
+                f"Distribution failed for: {', '.join(failed)}",
             )
-        else:
-            stage = submission_models.STAGE_EDITOR_COPYEDITING
-            element = core_models.WorkflowElement.objects.get(
-                journal=article.journal,
-                stage=stage,
-            )
-            for linked_article in linked_articles:
-                core_models.WorkflowLog.objects.get_or_create(
-                    article=linked_article,
-                    element=element,
-                )
+        elif results:
+            # Fetched after distributing so the new copies are included.
+            for linked_article in utils.get_interlinked_articles(article.pk):
+                element = core_models.WorkflowElement.objects.filter(
+                    journal=linked_article.journal,
+                    stage=submission_models.STAGE_EDITOR_COPYEDITING,
+                ).first()
+                if element:
+                    core_models.WorkflowLog.objects.get_or_create(
+                        article=linked_article,
+                        element=element,
+                    )
             messages.success(
                 request,
                 "Articles distributed successfully",
@@ -143,7 +150,7 @@ def hydra_jump_url(request, article_id):
     context = {
         'article': article,
         'linked_journals': linked_journals,
-        'linked_articles': linked_articles,
+        'linked_articles': utils.get_interlinked_articles(article.pk),
     }
     return render(
         request,
@@ -154,40 +161,19 @@ def hydra_jump_url(request, article_id):
 
 
 @staff_member_required
-@require_GET
+@require_POST
 def distribute_articles_view(request, article_id):
     try:
         article = Article.objects.get(pk=article_id)
     except Article.DoesNotExist:
         return HttpResponseNotFound("Article not found")
 
-    journals = events.distribute_articles(
+    results = events.distribute_articles(
         article=article,
     )
 
-    if not journals:
+    if not results:
         return JsonResponse({"status": "No linked journals found"}, status=200)
-
-    results = []
-
-    for journal in journals:
-        try:
-            call_command(
-                "copy_articles",
-                article.journal.code,
-                journal_code=journal.code,
-                article=article.pk,
-            )
-            results.append({
-                "journal": journal.code,
-                "status": "success",
-            })
-        except Exception as e:
-            results.append({
-                "journal": journal.code,
-                "status": "error",
-                "message": str(e),
-            })
 
     return JsonResponse({
         "article_id": article.pk,

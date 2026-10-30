@@ -13,12 +13,12 @@ urlpatterns = [
         name="distribute_articles",
     ),
     re_path(
-        r'articles/',
+        r'^articles/$',
         views.HydraHandshakeView.as_view(),
         name="hydra_handshake_url",
     ),
     re_path(
-        r'article/(?P<article_id>\d+)/',
+        r'^article/(?P<article_id>\d+)/$',
         views.hydra_jump_url,
         name="hydra_jump_url",
     ),

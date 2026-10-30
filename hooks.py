@@ -1,5 +1,6 @@
 from urllib.parse import urlparse
 
+from django.conf import settings
 from django.db.models import Q, Subquery
 from django.http import Http404
 from django.template.loader import render_to_string
@@ -127,9 +128,13 @@ def language_header_switcher(context):
             pk__in=visited - {article.pk},
         ).select_related("journal")
 
+        # Submission journals hold the original, not a translation, so they
+        # get no language link.
+        submission_journals = getattr(settings, "HYDRA_SUBMISSION_JOURNALS", [])
+
         for linked_article in linked_articles:
             linked_journal = linked_article.journal
-            if linked_journal.code == 'ilr':
+            if linked_journal.code in submission_journals:
                 continue
             try:
                 linked_language = linked_journal.get_setting(

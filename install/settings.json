@@ -5,10 +5,10 @@
     },
     "setting": {
       "description": "Enable Hydra Sidebar",
-      "is_translatable": true,
+      "is_translatable": false,
       "name": "hydra_enable_sidebar",
       "pretty_name": "Enable Hydra Sidebar",
-      "type": "char"
+      "type": "boolean"
     },
     "value": {
       "default": ""
