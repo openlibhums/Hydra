@@ -1,0 +1,32 @@
+[
+  {
+    "group": {
+      "name": "plugin:hydra"
+    },
+    "setting": {
+      "description": "Enable Hydra Sidebar",
+      "is_translatable": false,
+      "name": "hydra_enable_sidebar",
+      "pretty_name": "Enable Hydra Sidebar",
+      "type": "boolean"
+    },
+    "value": {
+      "default": ""
+    }
+  },
+  {
+    "group": {
+      "name": "plugin:hydra"
+    },
+    "setting": {
+      "description": "Articles are submitted to this journal and distributed from it, so it is left out of the language switcher.",
+      "is_translatable": false,
+      "name": "hydra_submission_journal",
+      "pretty_name": "Submission journal",
+      "type": "boolean"
+    },
+    "value": {
+      "default": ""
+    }
+  }
+]

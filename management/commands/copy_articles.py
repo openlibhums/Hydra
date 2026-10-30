@@ -1,5 +1,6 @@
 import os
 import shutil
+import itertools
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -11,6 +12,7 @@ from core import models as core_models
 from identifiers import models as identifiers_models
 from utils import setting_handler, render_template
 from plugins.hydra import models
+from plugins.hydra import utils as hydra_utils
 
 
 class Command(BaseCommand):
@@ -42,6 +44,11 @@ class Command(BaseCommand):
             help='Optional single article ID to copy',
         )
         parser.add_argument(
+            "--stage",
+            type=str,
+            help="Optional stage to copy articles into"
+        )
+        parser.add_argument(
             '--target-lang',
             type=str,
             help=(
@@ -55,6 +62,7 @@ class Command(BaseCommand):
         target_code = options['target']
         issue_id = options.get('issue')
         article_id = options.get('article')
+        stage = options.get('stage')
         self.target_lang = options.get('target_lang')
 
         try:
@@ -73,10 +81,10 @@ class Command(BaseCommand):
 
         for article in articles:
             with transaction.atomic():
-                new_article = self.copy_article(article, target_journal)
+                new_article = self.copy_article(article, target_journal, stage)
                 self.link_articles(article, new_article)
 
-    def copy_article(self, article, target_journal):
+    def copy_article(self, article, target_journal, stage):
         # Check for existing pubid in target journal
         pub_id = article.pk
         existing = identifiers_models.Identifier.objects.filter(
@@ -102,7 +110,7 @@ class Command(BaseCommand):
             new_article = submission_models.Article(
                 journal=target_journal,
                 language=article.language,
-                stage=article.stage,
+                stage=stage if stage else article.stage,
                 is_import=True,
             )
 
@@ -127,7 +135,7 @@ class Command(BaseCommand):
         new_article.last_page = article.last_page
         new_article.page_numbers = article.page_numbers
         new_article.total_pages = article.total_pages
-        new_article.stage = article.stage
+        new_article.stage = stage if stage else article.stage
         new_article.publication_fees = article.publication_fees
         new_article.submission_requirements = article.submission_requirements
         new_article.copyright_notice = article.copyright_notice
@@ -156,6 +164,10 @@ class Command(BaseCommand):
             # Set default / en language to translated language
             new_article.title_en = getattr(article, f"title_{language}")
             new_article.title = getattr(article, f"title_{language}")
+            new_article.language = (
+                hydra_utils.article_language_for(language)
+                or new_article.language
+            )
 
         # Section
         if article.section:

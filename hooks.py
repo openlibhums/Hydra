@@ -1,13 +1,16 @@
-from itertools import groupby
-from operator import attrgetter
+from urllib.parse import urlparse
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q, Subquery
-from django.apps import apps
+from django.http import Http404
 from django.template.loader import render_to_string
 from django.utils.translation import get_language_info
 
-from plugins.hydra import models
+from plugins.hydra import models, utils
 from utils.logger import get_logger
+from submission import models as submission_models
+
+from utils import setting_handler
 
 
 logger = get_logger(__name__)
@@ -27,6 +30,14 @@ def sidebar_article_links(context, article):
         Q(from_article=article) | Q(from_article__in=Subquery(parents_subQ))
     ).exclude(to_article=article).distinct()
     if relatives.exists():
+        relatives = list(relatives.select_related("to_article__journal"))
+        for relation in relatives:
+            relation.language_label = linked_article_language_label(
+                relation.to_article,
+            )
+            relation.language_title = linked_article_language_title(
+                relation.to_article,
+            )
         return render_to_string(
             "hydra/elements/sidebar_links.html",
             {"relatives": relatives},
@@ -34,9 +45,52 @@ def sidebar_article_links(context, article):
     return ""
 
 
+def linked_article_language_label(article):
+    """
+    Labels a linked article by its journal's language, as the header
+    switcher does, falling back to the article's own language.
+    """
+    language = utils.journal_language_code(article.journal)
+    if language:
+        try:
+            return get_language_info(language)["name_local"]
+        except KeyError:
+            pass
+    return article.get_language_display()
+
+
+def linked_article_language_title(article):
+    """
+    Returns a linked article's title in its journal's language, rather than
+    the language of the site being viewed, falling back to the usual title.
+    """
+    language = utils.journal_language_code(article.journal)
+    if language:
+        title = getattr(article, "title_{}".format(language), None)
+        if title:
+            return title
+    return article.title
+
+
+def is_submission_journal(journal):
+    """
+    Submission journals hold the original, not a translation, so they get no
+    language link.
+    """
+    try:
+        return setting_handler.get_setting(
+            "plugin:hydra",
+            "hydra_submission_journal",
+            journal=journal,
+        ).processed_value
+    except ObjectDoesNotExist:
+        return False
+
+
 def language_header_switcher(context):
     """
-    Provides a language switcher for linked journal sites.
+    Provides a language switcher for journals linked by LinkedArticle records,
+    or (when not on an article page) switches to equivalent paths on linked journals.
     """
 
     request = context["request"]
@@ -47,57 +101,108 @@ def language_header_switcher(context):
     if not journal:
         return ""
 
-    # Find the linked group this journal belongs to
-    try:
-        linked_group = journal.linked_journals
-    except models.LinkedJournals.DoesNotExist:
-        try:
-            linked_group = models.LinkedJournals.objects.get(links=journal)
-        except models.LinkedJournals.DoesNotExist:
-            return ""
-
-    if not linked_group.journal_link.exists():
-        return ""
-
-    # Strip the journal-specific path prefix
-    prefix = f"/{journal.code}/"
-    stripped_path = path[len(prefix):] if path.startswith(prefix) else path
-    corrected_path = "/issues/" if stripped_path.startswith("issue/") else f"/{stripped_path}"
-
-    # Build the full set of group journals
-    group_journals = {linked_group.journal}
-    group_journals.update(
-        link.to_journal for link in linked_group.journal_link.select_related("to_journal")
-    )
-
     links = []
 
-    for linked_journal in group_journals:
-        if linked_journal.pk == journal.pk:
-            continue
+    # Normalise path (e.g. homepage, issue pages, etc.)
+    prefix = f"/{journal.code}/"
+    stripped_path = path[len(prefix):] if path.startswith(prefix) else path
+    normalised_path = stripped_path.lstrip("/")
 
-        try:
-            linked_language = linked_journal.get_setting(
-                group_name="general",
-                setting_name="default_journal_language",
-            )
-        except Exception:
-            continue
+    if not normalised_path:
+        corrected_path = "/"
+    elif normalised_path.startswith("issue/"):
+        corrected_path = "/issues/"
+    else:
+        corrected_path = f"/{normalised_path}"
 
-        if article:
-            related = article.linked_from.select_related("from_article__journal", "to_article__journal").all()
-            related |= article.linked_to.select_related("from_article__journal", "to_article__journal").all()
-            if not any(
-                a.to_article.journal_id == linked_journal.pk
-                or a.from_article.journal_id == linked_journal.pk
-                for a in related
-            ):
+    if article:
+        # Build set of transitive linked article PKs
+        visited = set()
+        to_visit = {article.pk}
+
+        while to_visit:
+            current_ids = to_visit
+            to_visit = set()
+
+            linked = models.LinkedArticle.objects.filter(
+                Q(from_article_id__in=current_ids) | Q(to_article_id__in=current_ids)
+            ).values("from_article_id", "to_article_id")
+
+            for link in linked:
+                from_id = link["from_article_id"]
+                to_id = link["to_article_id"]
+
+                if from_id not in visited:
+                    to_visit.add(from_id)
+                if to_id not in visited:
+                    to_visit.add(to_id)
+
+            visited.update(current_ids)
+
+        linked_articles = submission_models.Article.objects.filter(
+            pk__in=visited - {article.pk},
+        ).select_related("journal")
+
+        for linked_article in linked_articles:
+            linked_journal = linked_article.journal
+            if is_submission_journal(linked_journal):
+                continue
+            try:
+                linked_language = linked_journal.get_setting(
+                    group_name="general",
+                    setting_name="default_journal_language",
+                )
+            except Exception:
                 continue
 
-        links.append({
-            "name_local": get_language_info(linked_language)["name_local"],
-            "url": linked_journal.site_url(path=corrected_path),
-        })
+            links.append({
+                "name_local": get_language_info(linked_language)["name_local"],
+                "url": linked_journal.site_url(path=corrected_path),
+            })
+
+    else:
+        # No article: use journal linkage
+        try:
+            # If current journal is the parent
+            linked_set = journal.linked_journals
+        except models.LinkedJournals.DoesNotExist:
+            # Otherwise find the parent set it belongs to
+            linked_set = models.LinkedJournals.objects.filter(
+                links=journal
+            ).first()
+
+        if linked_set:
+            # Add all linked journals (siblings)
+            for linked_journal in linked_set.links.all():
+                if linked_journal == journal:
+                    continue
+
+                try:
+                    linked_language = linked_journal.get_setting(
+                        group_name="general",
+                        setting_name="default_journal_language",
+                    )
+                except Exception:
+                    continue
+
+                links.append({
+                    "name_local": get_language_info(linked_language)["name_local"],
+                    "url": linked_journal.site_url(path=corrected_path),
+                })
+
+            # Add the parent journal (if not current)
+            if linked_set.journal != journal:
+                try:
+                    parent_language = linked_set.journal.get_setting(
+                        group_name="general",
+                        setting_name="default_journal_language",
+                    )
+                    links.append({
+                        "name_local": get_language_info(parent_language)["name_local"],
+                        "url": linked_set.journal.site_url(path=corrected_path),
+                    })
+                except Exception:
+                    pass
 
     if not links:
         return ""
@@ -108,3 +213,73 @@ def language_header_switcher(context):
             "language_links": links,
         }
     )
+
+
+
+def editor_nav_article_switcher(context):
+    """
+    Adds backend links to linked articles.
+    """
+    request = context["request"]
+    journal = getattr(request, "journal", None)
+    article = context.get("article")
+
+    sidebar_enabled = setting_handler.get_setting(
+        "plugin:hydra",
+        "hydra_enable_sidebar",
+        journal=journal,
+    ).processed_value
+
+    if not sidebar_enabled:
+        return ""
+
+    if not article or not journal:
+        return ""
+
+    related = article.linked_from.select_related(
+        "from_article__journal",
+        "to_article__journal",
+    ).all()
+    related |= article.linked_to.select_related(
+        "from_article__journal",
+        "to_article__journal",
+    ).all()
+
+    linked_articles = utils.get_interlinked_articles(article.pk)
+    linked_articles = {a for a in linked_articles if a.pk != article.pk}
+
+    if not linked_articles:
+        return ""
+
+    current_code = journal.code
+    links = []
+
+    for a in linked_articles:
+        raw_url = a.current_workflow_element_url or ""
+        parsed = urlparse(raw_url)
+        path_parts = parsed.path.strip("/").split("/")
+
+        # If the current journal code appears early AND this is a *different* journal
+        if (
+            current_code in path_parts[:2]
+            and a.journal_id != journal.pk
+        ):
+            path_parts = [part for part in path_parts if part != current_code]
+
+        cleaned_path = "/" + "/".join(path_parts)
+
+        links.append({
+            "article": a,
+            "journal": a.journal.code if hasattr(a, "journal") else "",
+            "url": cleaned_path,
+            "domain": a.journal.domain,
+        })
+
+    return render_to_string(
+        "hydra/elements/linked_article_admin_links.html",
+        {
+            "article_links": links,
+        }
+    )
+
+
