@@ -122,12 +122,13 @@ def hydra_jump_url(request, article_id):
             stage=submission_models.STAGE_EDITOR_COPYEDITING,
         )
         failed = [r["journal"] for r in results if r["status"] == "error"]
+        succeeded = [r["journal"] for r in results if r["status"] == "success"]
         if failed:
             messages.error(
                 request,
                 f"Distribution failed for: {', '.join(failed)}",
             )
-        elif results:
+        if succeeded:
             # Fetched after distributing so the new copies are included.
             for linked_article in utils.get_interlinked_articles(article.pk):
                 element = core_models.WorkflowElement.objects.filter(
@@ -141,7 +142,7 @@ def hydra_jump_url(request, article_id):
                     )
             messages.success(
                 request,
-                "Articles distributed successfully",
+                f"Article distributed to: {', '.join(succeeded)}",
             )
 
         return redirect('hydra_jump_url', article_id=article_id)

@@ -1,10 +1,13 @@
 from unittest import mock
 
 from django.contrib.auth.models import AnonymousUser
+from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.exceptions import PermissionDenied
 from django.test import RequestFactory, TestCase
 from django.template import Context
+from core import models as core_models
 from identifiers.models import Identifier
+from submission import models as submission_models
 from utils import setting_handler
 from utils.install import update_settings
 from utils.testing import helpers
@@ -148,6 +151,45 @@ class HydraViewsTest(LinkedJournalsTestCase):
         except PermissionDenied:
             return
         self.assertNotEqual(response.status_code, 200)
+
+    def test_jump_logs_workflow_even_if_a_journal_fails(self):
+        copy = helpers.create_article(self.journal2)
+        models.LinkedArticle.objects.create(
+            from_article=self.article,
+            to_article=copy,
+        )
+        element, _ = core_models.WorkflowElement.objects.get_or_create(
+            journal=self.journal2,
+            stage=submission_models.STAGE_EDITOR_COPYEDITING,
+            defaults={
+                "element_name": "copyediting",
+                "handshake_url": "copyediting",
+                "jump_url": "copyediting",
+            },
+        )
+        request = self.factory.post("/", {"code_to_distribute": "all"})
+        request.journal = self.journal1
+        request.user = helpers.create_editor(self.journal1)
+        setattr(request, "session", {})
+        setattr(request, "_messages", FallbackStorage(request))
+        results = [
+            {"journal": self.journal2.code, "status": "success"},
+            {"journal": "other", "status": "error", "message": "boom"},
+        ]
+
+        with mock.patch(
+            "plugins.hydra.utils.distribute_articles",
+            return_value=results,
+        ):
+            views.hydra_jump_url(request, self.article.pk)
+
+        self.assertTrue(
+            core_models.WorkflowLog.objects.filter(
+                article=copy,
+                element=element,
+            ).exists()
+        )
+
 
 class LanguageHeaderSwitcherTest(LinkedJournalsTestCase):
     def setUp(self):
