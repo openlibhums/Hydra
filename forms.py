@@ -6,7 +6,18 @@ from plugins.hydra import plugin_settings
 
 
 class HydraAdminForm(forms.Form):
-    hydra_enable_sidebar = forms.BooleanField(label="Enable Hydra Sidebar", required=False)
+    hydra_enable_sidebar = forms.BooleanField(
+        label="Enable Hydra Sidebar",
+        required=False,
+    )
+    hydra_submission_journal = forms.BooleanField(
+        label="Submission journal",
+        help_text=(
+            "Articles are submitted to this journal and distributed from it, "
+            "so it is left out of the language switcher."
+        ),
+        required=False,
+    )
 
     def __init__(self, *args, journal=None, **kwargs):
         """Initialize form with current plugin settings and apply help text."""
@@ -16,18 +27,17 @@ class HydraAdminForm(forms.Form):
             name=plugin_settings.SHORT_NAME,
         )
 
-        # Initialize fields with settings values and help texts
-        hydra_enable_sidebar_setting = setting_handler.get_plugin_setting(
-            self.plugin,
-            'hydra_enable_sidebar',
-            self.journal,
-            create=True,
-            pretty='Enable Hydra Sidebar',
-            types='boolean'
-        )
-        self.fields[
-            'hydra_enable_sidebar'
-        ].initial = hydra_enable_sidebar_setting.processed_value
+        # Initialize fields with settings values
+        for setting_name, field in self.fields.items():
+            setting = setting_handler.get_plugin_setting(
+                self.plugin,
+                setting_name,
+                self.journal,
+                create=True,
+                pretty=field.label,
+                types='boolean'
+            )
+            field.initial = setting.processed_value
 
     def save(self):
         """Save each setting in the cleaned data to the plugin settings."""

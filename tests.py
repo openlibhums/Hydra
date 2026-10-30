@@ -2,9 +2,11 @@ from unittest import mock
 
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, TestCase
 from django.template import Context
 from identifiers.models import Identifier
+from utils import setting_handler
+from utils.install import update_settings
 from utils.testing import helpers
 
 from plugins.hydra import events, hooks, models, utils, views
@@ -75,7 +77,9 @@ class SidebarArticleLinksTest(TestCase):
         self.assertIn(expected, result)
 
 
-class ReviewFixesTest(TestCase):
+class LinkedJournalsTestCase(TestCase):
+    """Two journals in one Hydra group, with an article in the first."""
+
     def setUp(self):
         helpers.create_press()
         self.journal1, self.journal2 = helpers.create_journals()
@@ -90,6 +94,7 @@ class ReviewFixesTest(TestCase):
         self.article = helpers.create_article(self.journal1)
         self.factory = RequestFactory()
 
+class GetInterlinkedArticlesTest(LinkedJournalsTestCase):
     def test_interlinked_articles_see_new_links(self):
         self.assertEqual(utils.get_interlinked_articles(self.article.pk), set())
         copy = helpers.create_article(self.journal2)
@@ -99,6 +104,7 @@ class ReviewFixesTest(TestCase):
         )
         self.assertEqual(utils.get_interlinked_articles(self.article.pk), {copy})
 
+class DistributeArticlesTest(LinkedJournalsTestCase):
     def test_events_distribute_copies_once_per_linked_journal(self):
         with mock.patch("plugins.hydra.utils.call_command") as call:
             results = events.distribute_articles(article=self.article)
@@ -122,6 +128,7 @@ class ReviewFixesTest(TestCase):
         logger.exception.assert_called_once()
         self.assertEqual(results[0]["status"], "error")
 
+class HydraViewsTest(LinkedJournalsTestCase):
     def test_distribute_view_rejects_get(self):
         request = self.factory.get("/")
         request.user = helpers.create_user(
@@ -142,6 +149,11 @@ class ReviewFixesTest(TestCase):
             return
         self.assertNotEqual(response.status_code, 200)
 
+class LanguageHeaderSwitcherTest(LinkedJournalsTestCase):
+    def setUp(self):
+        super().setUp()
+        update_settings(file_path="plugins/hydra/install/settings.json")
+
     def test_language_switcher_skips_submission_journals(self):
         copy = helpers.create_article(self.journal2)
         models.LinkedArticle.objects.create(
@@ -156,5 +168,10 @@ class ReviewFixesTest(TestCase):
             self.journal2.site_url(path="/"),
             hooks.language_header_switcher(context),
         )
-        with override_settings(HYDRA_SUBMISSION_JOURNALS=[self.journal2.code]):
-            self.assertEqual(hooks.language_header_switcher(context), "")
+        setting_handler.save_setting(
+            "plugin:hydra",
+            "hydra_submission_journal",
+            self.journal2,
+            "On",
+        )
+        self.assertEqual(hooks.language_header_switcher(context), "")

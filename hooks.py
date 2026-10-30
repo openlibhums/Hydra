@@ -1,6 +1,6 @@
 from urllib.parse import urlparse
 
-from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q, Subquery
 from django.http import Http404
 from django.template.loader import render_to_string
@@ -72,6 +72,21 @@ def linked_article_language_title(article):
     return article.title
 
 
+def is_submission_journal(journal):
+    """
+    Submission journals hold the original, not a translation, so they get no
+    language link.
+    """
+    try:
+        return setting_handler.get_setting(
+            "plugin:hydra",
+            "hydra_submission_journal",
+            journal=journal,
+        ).processed_value
+    except ObjectDoesNotExist:
+        return False
+
+
 def language_header_switcher(context):
     """
     Provides a language switcher for journals linked by LinkedArticle records,
@@ -128,13 +143,9 @@ def language_header_switcher(context):
             pk__in=visited - {article.pk},
         ).select_related("journal")
 
-        # Submission journals hold the original, not a translation, so they
-        # get no language link.
-        submission_journals = getattr(settings, "HYDRA_SUBMISSION_JOURNALS", [])
-
         for linked_article in linked_articles:
             linked_journal = linked_article.journal
-            if linked_journal.code in submission_journals:
+            if is_submission_journal(linked_journal):
                 continue
             try:
                 linked_language = linked_journal.get_setting(

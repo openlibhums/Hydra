@@ -40,10 +40,7 @@ This is particularly useful for publishers who publish translated versions of th
 5. **Configure and enable the plugin** in the Janeway admin interface:  
    Configuration of Hydra is handled via the Admin interface as it has no front end of its own.
 
-6. **List your submission journals** in your Janeway settings, so they are left out of the language switcher:
-   ```python
-   HYDRA_SUBMISSION_JOURNALS = ["ilr"]
-   ```
+6. **Mark your submission journal**: on its Hydra settings page, tick "Submission journal" so it is left out of the language switcher.
 
 ---
 
